@@ -1,6 +1,6 @@
 # hipdash
 
-Live dashboard for [MTPLX](https://github.com/Mtplx/MTPLX) (a multi-token-prediction LLM
+Live dashboard for [MTPLX](https://github.com/youssofal/MTPLX) (a multi-token-prediction LLM
 runtime). Streams per-request metrics, paged-KV cache state, system stats, and
 OpenCode agent activity. Persists everything to SQLite so you get history and
 restart-aware runs across sessions.
