@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePoll } from '../lib/usePoll';
 import { getJson, postJson, MetricPoint, Status, Run } from '../lib/api';
-import { fmtBytes, fmtNumber, shorten } from '../lib/format';
+import { fmtBytes, fmtNumber, shorten, shortenSessionId } from '../lib/format';
 import { useSort, SortTh } from '../lib/useSort';
 import LineChart from '../components/LineChart';
 import LiveGeneration from '../components/LiveGeneration';
@@ -30,7 +30,6 @@ export default function MtplxPage() {
   const { data: metrics } = usePoll<any>(() => getJson('/metrics'), 1500);
   const { data: sessionsResp } = usePoll<any>(() => getJson('/admin/sessions'), 2000);
   const { data: status } = usePoll<Status>(() => getJson('/api/status'), 3000);
-  const { data: opencodeCfg } = usePoll<any>(() => getJson('/opencode-config.json'), 30000);
   const { data: hist } = usePoll<MetricsResp>(
     () =>
       getJson(
@@ -41,7 +40,7 @@ export default function MtplxPage() {
   const { data: runsResp, refresh: refreshRuns } = usePoll<{ runs: Run[] }>(() => getJson('/api/runs?target=mtplx'), 8000);
   const [selectedRunId, setSelectedRunId] = useState<number | 'current' | 'all'>('current');
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<'bench' | 'live' | 'bank'>('bench');
+  const [activeTab, setActiveTab] = useState<'bench' | 'live' | 'bank' | 'sessions'>('bench');
   const [showAll, setShowAll] = useState(false);
 
   const runs = runsResp?.runs || [];
@@ -252,8 +251,6 @@ export default function MtplxPage() {
         </div>
       ) : null}
 
-      <SessionsTable sessions={sessions} />
-
       <div className="section">
         <div className="head">
           <div className="tabs">
@@ -277,6 +274,13 @@ export default function MtplxPage() {
               Live recent buffer
               <span className="tab-badge">{recent?.length ?? 0}</span>
             </button>
+            <button
+              className={`tab ${activeTab === 'sessions' ? 'on' : ''}`}
+              onClick={() => setActiveTab('sessions')}
+            >
+              Active sessions
+              <span className="tab-badge">{sessions.length}</span>
+            </button>
           </div>
           <span className="right">
             {activeTab === 'bench' ? (
@@ -291,6 +295,8 @@ export default function MtplxPage() {
               </>
             ) : activeTab === 'bank' ? (
               <>{sessionsResp?.session_bank?.eviction_log?.length ?? 0} evictions · {fmtBytes(sessionsResp?.session_bank?.total_nbytes)} live</>
+            ) : activeTab === 'sessions' ? (
+              <>{sessions.length} session{sessions.length === 1 ? '' : 's'} · {sessions.filter((s: any) => s.in_flight).length} in flight</>
             ) : (
               <>/metrics buffer · {recent?.length ?? 0}</>
             )}
@@ -299,7 +305,6 @@ export default function MtplxPage() {
         {activeTab === 'bench' ? (
           <BenchmarkReport
             requests={requestsResp?.requests || []}
-            sessionToAgent={opencodeCfg?.session_to_agent || {}}
             health={status?.last_health}
             runs={runs}
             selectedRunId={selectedRunId}
@@ -311,6 +316,8 @@ export default function MtplxPage() {
           />
         ) : activeTab === 'bank' ? (
           <SessionBankHistory sessions={sessionsResp} />
+        ) : activeTab === 'sessions' ? (
+          <SessionsTable sessions={sessions} />
         ) : (
           <RecentBufferTable recent={recent} />
         )}
@@ -335,26 +342,24 @@ function SessionsTable({ sessions }: { sessions: any[] }) {
     },
   );
   return (
-    <div className="section">
-      <div className="head"><h2>Active sessions</h2><span className="right">{sessions.length} sessions</span></div>
-      <div className="scroll-x">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <SortTh label="session id"   sortKey="session_id"     state={sort} onSort={onSort} />
-              <SortTh label="prefix tok"   sortKey="prefix_len"     state={sort} onSort={onSort} align="right" />
-              <SortTh label="boundaries"   sortKey="boundaries"     state={sort} onSort={onSort} align="right" />
-              <SortTh label="last access"  sortKey="last_access_s"  state={sort} onSort={onSort} align="right" />
-              <SortTh label="in flight"    sortKey="in_flight"      state={sort} onSort={onSort} />
-              <th></th>
-            </tr>
-          </thead>
+    <div className="scroll-x">
+      <table className="tbl">
+        <thead>
+          <tr>
+            <SortTh label="session id"   sortKey="session_id"     state={sort} onSort={onSort} />
+            <SortTh label="prefix tok"   sortKey="prefix_len"     state={sort} onSort={onSort} align="right" />
+            <SortTh label="boundaries"   sortKey="boundaries"     state={sort} onSort={onSort} align="right" />
+            <SortTh label="last access"  sortKey="last_access_s"  state={sort} onSort={onSort} align="right" />
+            <SortTh label="in flight"    sortKey="in_flight"      state={sort} onSort={onSort} />
+            <th></th>
+          </tr>
+        </thead>
           <tbody>
             {sessions.length === 0 ? (
               <tr><td colSpan={6} className="dim">no sessions</td></tr>
             ) : sorted.map((s: any) => (
               <tr key={s.session_id + (s.in_flight_started_s || '')}>
-                <td>{shorten(s.session_id, 28)}</td>
+                <td title={s.session_id}>{shortenSessionId(s.session_id, 26)}</td>
                 <td className="num">{s.prefix_len ?? '-'}</td>
                 <td className="num">{Array.isArray(s.boundaries) ? s.boundaries.length : '-'}</td>
                 <td className="num">{s.last_access_s ? new Date(s.last_access_s * 1000).toLocaleTimeString() : '-'}</td>
@@ -373,7 +378,6 @@ function SessionsTable({ sessions }: { sessions: any[] }) {
           </tbody>
         </table>
       </div>
-    </div>
   );
 }
 
@@ -421,7 +425,7 @@ function RecentBufferTable({ recent }: { recent: any[] }) {
               const cacheLabel = r.session_cache_hit ? 'hit' : (r.cache_miss_reason || 'miss');
               return (
                 <tr key={i}>
-                  <td>{shorten(r.session_id || '-', 14)}</td>
+                  <td title={r.session_id || ''}>{shortenSessionId(r.session_id)}</td>
                   <td><Pill tone={modeTone(mode)} variant="badge">{(mode || '-').toUpperCase()}</Pill></td>
                   <td className="num">{r.mtp_depth ?? '-'}</td>
                   <td className="num">{fmtNumber(r.decode_tok_s)}</td>

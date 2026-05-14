@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fmtNumber, fmtTime, fmtDateTime, shorten } from '../lib/format';
+import { fmtNumber, fmtTime, fmtDateTime, fmtDuration, shorten, shortenSessionId } from '../lib/format';
 import { useSort, SortTh } from '../lib/useSort';
 import Pill from './Pill';
 import { agentColor } from '../lib/agentColor';
@@ -22,7 +22,6 @@ type RawRequest = {
 
 type Props = {
   requests: RawRequest[];
-  sessionToAgent: Record<string, string>;
   health: any;
   runs?: Run[];
   selectedRunId?: number | 'current' | 'all';
@@ -50,7 +49,6 @@ function shortBytes(n: number | null | undefined): string {
 
 export default function BenchmarkReport({
   requests,
-  sessionToAgent,
   health,
   runs = [],
   selectedRunId = 'current',
@@ -60,7 +58,7 @@ export default function BenchmarkReport({
   showAll = false,
   onToggleShowAll,
 }: Props) {
-  const [view, setView] = useState<'chrono' | 'agent'>('chrono');
+  const [view, setView] = useState<'chrono' | 'session'>('chrono');
   const [archiving, setArchiving] = useState(false);
   // Tick once a second so the live elapsed timer keeps incrementing even if
   // the parent hasn't polled /admin/sessions in the last second.
@@ -74,17 +72,15 @@ export default function BenchmarkReport({
 
   const rows = useMemo(() => {
     const sorted = [...(requests || [])].sort((a, b) => a.ts - b.ts);
-    const out = sorted.map((r, i) => {
+    return sorted.map((r, i) => {
       const cacheHit = !!r.raw?.session_cache_hit;
       const cachedTokens = r.raw?.cached_tokens ?? 0;
       const cacheLabel = cacheHit || cachedTokens > 0 ? 'WARM' : 'COLD';
-      const agent = (r.session_id && sessionToAgent[r.session_id]) || (r.session_id || '-');
       const acc = acceptPctParts(r);
       return {
         n: i + 1,
         ts: r.ts,
         cache: cacheLabel,
-        agent,
         sessionId: r.session_id || '-',
         prompt: r.prompt_tokens,
         cached: cachedTokens,
@@ -100,8 +96,7 @@ export default function BenchmarkReport({
         running: false,
       };
     });
-    return out;
-  }, [requests, sessionToAgent]);
+  }, [requests]);
 
   // Synthesize a "running" row per in-flight session so the user can watch it
   // tick in real time. The wall depends on Date.now() so it must recompute on
@@ -115,13 +110,11 @@ export default function BenchmarkReport({
       const elapsedS = (now - startMs) / 1000;
       const cacheLabel =
         s.last_cache_miss_reason && s.last_cache_miss_reason !== 'hit' ? 'COLD' : 'WARM';
-      const agent = (s.session_id && sessionToAgent[s.session_id]) || (s.session_id || '-');
       const prog = liveProgress[s.session_id];
       return {
         n: `▶${i + 1}`,
         ts: startMs,
         cache: cacheLabel,
-        agent,
         sessionId: s.session_id || '-',
         prompt: s.prefix_len ?? null,
         cached: 0,
@@ -139,25 +132,41 @@ export default function BenchmarkReport({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveSessions, sessionToAgent, liveProgress, tick]);
+  }, [liveSessions, liveProgress, tick]);
 
-  const grouped = useMemo(() => {
-    if (view !== 'agent') return null;
+  const groupedBySession = useMemo(() => {
+    if (view !== 'session') return null;
     const all = [...liveRows, ...rows];
     const map = new Map<string, typeof rows>();
     for (const r of all) {
-      const k = r.agent || '-';
+      const k = r.sessionId || '-';
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(r);
     }
-    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+    const enriched = [...map.entries()].map(([sid, arr]) => {
+      const wallSum = arr.reduce((a, b) => a + (b.wall || 0), 0);
+      const decodeAvg = arr.length ? arr.reduce((a, b) => a + (b.decode || 0), 0) / arr.length : 0;
+      const promptSum = arr.reduce((a, b) => a + (b.prompt || 0), 0);
+      const outSum = arr.reduce((a, b) => a + (b.out || 0), 0);
+      const startTs = Math.min(...arr.map((r) => r.ts));
+      const endTs = Math.max(...arr.map((r) => r.ts));
+      const spanS = (endTs - startTs) / 1000;
+      const acceptVals = arr.map((r) => r.d_avg).filter((v): v is number => v != null);
+      const acceptAvg = acceptVals.length ? acceptVals.reduce((a, b) => a + b, 0) / acceptVals.length : null;
+      const hasLive = arr.some((r) => r.running);
+      return { sid, rows: arr, turns: arr.length, wallSum, decodeAvg, promptSum, outSum, startTs, endTs, spanS, acceptAvg, hasLive };
+    });
+    // Live sessions pin to the top; otherwise sort by most-recent activity desc
+    return enriched.sort((a, b) => {
+      if (a.hasLive !== b.hasLive) return a.hasLive ? -1 : 1;
+      return b.endTs - a.endTs;
+    });
   }, [view, rows, liveRows]);
 
   const sortAcc = {
     n: (r: any) => r.n,
     when: (r: any) => r.ts,
     cache: (r: any) => r.cache,
-    agent: (r: any) => r.agent,
     session: (r: any) => r.sessionId,
     prompt: (r: any) => r.prompt ?? 0,
     cached: (r: any) => r.cached ?? 0,
@@ -247,7 +256,7 @@ export default function BenchmarkReport({
       <div className="bench-toolbar">
         <span className="lab">VIEW:</span>
         <button className={`btn ${view === 'chrono' ? 'on' : ''}`} onClick={() => setView('chrono')}>chronological</button>
-        <button className={`btn ${view === 'agent' ? 'on' : ''}`} onClick={() => setView('agent')}>group by agent</button>
+        <button className={`btn ${view === 'session' ? 'on' : ''}`} onClick={() => setView('session')}>group by session</button>
         {onToggleShowAll ? (
           <button
             className={`btn ${showAll ? 'on' : ''}`}
@@ -270,7 +279,6 @@ export default function BenchmarkReport({
               <SortTh label="#"      sortKey="n"      state={sort} onSort={onSort} align="right" />
               <SortTh label="when"   sortKey="when"   state={sort} onSort={onSort} />
               <SortTh label="cache"  sortKey="cache"  state={sort} onSort={onSort} />
-              <SortTh label="agent"   sortKey="agent"   state={sort} onSort={onSort} />
               <SortTh label="session" sortKey="session" state={sort} onSort={onSort} />
               <SortTh label="prompt" sortKey="prompt" state={sort} onSort={onSort} align="right" />
               <SortTh label="cached" sortKey="cached" state={sort} onSort={onSort} align="right" />
@@ -286,26 +294,37 @@ export default function BenchmarkReport({
           <tbody>
             {view === 'chrono' && liveRows.map((r: any) => <BenchRow key={`live-${r.sessionId}-${r.ts}`} r={r} />)}
             {view === 'chrono' && sorted.length === 0 && liveRows.length === 0 ? (
-              <tr><td colSpan={14} className="dim">no turns recorded yet</td></tr>
+              <tr><td colSpan={13} className="dim">no turns recorded yet</td></tr>
             ) : null}
             {view === 'chrono' && sorted.map((r: any) => <BenchRow key={r.n} r={r} />)}
-            {view === 'agent' && grouped && grouped.flatMap(([k, arr]) => {
-              const c = agentColor(k);
+            {view === 'session' && groupedBySession && groupedBySession.flatMap((g) => {
+              const c = agentColor(g.sid);
               return [
-                <tr key={`g-${k}`} className="bench-group">
-                  <td colSpan={14} style={{ borderLeft: `3px solid ${c.borderColor}` }}>
-                    <span className="pill-x pill-x-tag" style={{ ...c, marginRight: 10 }}>{k}</span>
-                    {arr.length} turns · avg decode {fmtNumber(arr.reduce((a,b)=>a+(b.decode||0),0)/arr.length)} tok/s · avg accept {(() => {
-                      const v = arr.map(x=>x.d_avg).filter((x): x is number => x != null);
-                      return v.length ? `${Math.round(v.reduce((a,b)=>a+b,0)/v.length)}%` : '-';
-                    })()}
+                <tr key={`s-${g.sid}`} className="bench-group">
+                  <td colSpan={13} style={{ borderLeft: `3px solid ${c.borderColor}` }}>
+                    <span className="pill-x pill-x-tag" style={{ ...c, marginRight: 10 }} title={g.sid}>
+                      {shortenSessionId(g.sid, 28)}
+                    </span>
+                    {g.hasLive ? <Pill tone="good" style={{ marginRight: 8 }}>live</Pill> : null}
+                    <b>{fmtDuration(g.wallSum)}</b> total
+                    <span className="muted"> · {g.turns} turn{g.turns === 1 ? '' : 's'}</span>
+                    <span className="muted"> · {g.spanS > 1 ? `span ${fmtDuration(g.spanS)}` : ''}</span>
+                    <span className="muted"> · avg decode {fmtNumber(g.decodeAvg)} tok/s</span>
+                    <span className="muted"> · in {g.promptSum.toLocaleString()} tok</span>
+                    <span className="muted"> · out {g.outSum.toLocaleString()} tok</span>
+                    {g.acceptAvg != null ? (
+                      <span className="muted"> · avg accept {Math.round(g.acceptAvg)}%</span>
+                    ) : null}
                   </td>
                 </tr>,
-                ...arr.map((r) => <BenchRow key={`${k}-${r.n}`} r={r} />),
+                ...g.rows
+                  .slice()
+                  .sort((a, b) => b.ts - a.ts)
+                  .map((r) => <BenchRow key={`${g.sid}-${r.n}`} r={r} />),
               ];
             })}
-            {view === 'agent' && (!grouped || grouped.length === 0) ? (
-              <tr><td colSpan={14} className="dim">no turns recorded yet</td></tr>
+            {view === 'session' && (!groupedBySession || groupedBySession.length === 0) ? (
+              <tr><td colSpan={13} className="dim">no turns recorded yet</td></tr>
             ) : null}
           </tbody>
         </table>
@@ -327,12 +346,11 @@ function BenchRow({ r }: { r: any }) {
         ) : fmtTime(r.ts)}
       </td>
       <td><Pill tone={r.cache === 'WARM' ? 'warm' : 'cold'}>{r.cache}</Pill></td>
-      <td>
-        <span className="pill-x pill-x-tag" style={agentColor(r.agent)}>
-          {shorten(r.agent, 20)}
+      <td title={r.sessionId}>
+        <span className="pill-x pill-x-tag" style={agentColor(r.sessionId)}>
+          {shortenSessionId(r.sessionId)}
         </span>
       </td>
-      <td className="dim" title={r.sessionId}>{shorten(r.sessionId || '-', 18)}</td>
       <td className="num">{r.prompt ?? '-'}</td>
       <td className="num">{r.cached || '-'}</td>
       <td className="num">{r.ctx ? shortBytes(r.ctx) : '-'}</td>

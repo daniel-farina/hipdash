@@ -12,11 +12,7 @@ export const SIDECAR = {
 };
 
 export const MTPLX_PREFIXES = ['/admin', '/metrics', '/health', '/v1', '/cancel-all', '/tap'];
-export const SIDECAR_PATHS = [
-  '/system-stats.json',
-  '/opencode-config.json',
-  '/opencode-tool-usage.json',
-];
+export const SIDECAR_PATHS = ['/system-stats.json'];
 
 export function routeFor(path) {
   const p = path.split('?', 1)[0];

@@ -131,7 +131,7 @@ export default function SystemPage() {
         </div>
       </div>
 
-      {(['mtplx', 'opencode', 'claude'] as const).map((kind) => {
+      {(['mtplx', 'claude'] as const).map((kind) => {
         const list: any[] = procs[kind] || [];
         if (!list.length) return null;
         return <ProcessTable key={kind} kind={kind} list={list} />;

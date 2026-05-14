@@ -154,7 +154,7 @@ setInterval(() => {
 app.listen(PORT, BIND, () => {
   console.log(`mtplx-dashboard backend listening on http://${BIND}:${PORT}/`);
   console.log(`  proxying /admin/*, /metrics, /health, /v1/* -> MTPLX`);
-  console.log(`  proxying /system-stats.json, /opencode-* -> sidecar`);
+  console.log(`  proxying /system-stats.json -> sidecar`);
   console.log(`  history API at /api/history/* and /api/status`);
   console.log(
     fs.existsSync(FRONTEND_DIST)

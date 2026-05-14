@@ -245,21 +245,6 @@ async function pollSidecar() {
   saveSnapshot('system_stats', stats);
 }
 
-async function pollOpencode() {
-  try {
-    const cfg = await fetchJson(SIDECAR, '/opencode-config.json', { timeoutMs: 3000 });
-    saveSnapshot('opencode_config', cfg);
-  } catch (err) {
-    // sidecar may be down; pollSidecar already logged
-  }
-  try {
-    const usage = await fetchJson(SIDECAR, '/opencode-tool-usage.json?limit=30', { timeoutMs: 4000 });
-    saveSnapshot('opencode_tool_usage', usage);
-  } catch (err) {
-    // ignore
-  }
-}
-
 export function startPollers() {
   log('starting pollers');
   // MTPLX every 1.5s
@@ -274,16 +259,9 @@ export function startPollers() {
   }, 3000);
   pollSidecar().catch((e) => log('pollSidecar error:', e.message));
 
-  // OpenCode every 15s (configs change rarely)
-  const oInt = setInterval(() => {
-    pollOpencode().catch((e) => log('pollOpencode error:', e.message));
-  }, 15000);
-  pollOpencode().catch((e) => log('pollOpencode error:', e.message));
-
   return () => {
     clearInterval(mInt);
     clearInterval(sInt);
-    clearInterval(oInt);
   };
 }
 

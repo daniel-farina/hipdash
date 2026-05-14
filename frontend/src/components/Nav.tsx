@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 const items = [
   { to: '/',          label: 'Overview' },
   { to: '/mtplx',     label: 'MTPLX metrics' },
-  { to: '/opencode',  label: 'OpenCode' },
   { to: '/system',    label: 'Computer' },
   { to: '/restarts',  label: 'Restarts' },
 ];

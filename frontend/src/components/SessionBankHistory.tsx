@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { fmtBytes, fmtTime, shorten } from '../lib/format';
+import { fmtBytes, fmtTime, shortenSessionId } from '../lib/format';
 import { useSort, SortTh } from '../lib/useSort';
 import Pill, { cacheTone } from './Pill';
 import SessionBankChart from './SessionBankChart';
@@ -80,7 +80,7 @@ export default function SessionBankHistory({ sessions }: Props) {
                   <tr><td colSpan={5} className="dim">no live prefixes</td></tr>
                 ) : sortedPerSess.map((s) => (
                   <tr key={s.sid}>
-                    <td>{shorten(s.sid, 22)}</td>
+                    <td title={s.sid}>{shortenSessionId(s.sid)}</td>
                     <td className="num">{fmtBytes(s.bytes)}</td>
                     <td className="num">{s.entries}</td>
                     <td className="num">{s.prefix_max ?? '-'}</td>
@@ -113,7 +113,7 @@ export default function SessionBankHistory({ sessions }: Props) {
                 ) : sortedEvic.map((e: any, i: number) => (
                   <tr key={i}>
                     <td><Pill tone={cacheTone(e.reason)}>{e.reason || '-'}</Pill></td>
-                    <td>{shorten(e.session_id || '-', 18)}</td>
+                    <td title={e.session_id || ''}>{shortenSessionId(e.session_id)}</td>
                     <td className="num">{e.prefix_len ?? '-'}</td>
                     <td className="num">{fmtBytes(e.nbytes)}</td>
                     <td className="num">{e.last_access_s ? fmtTime(e.last_access_s * 1000) : '-'}</td>
