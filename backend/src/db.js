@@ -195,6 +195,50 @@ export function getMetrics(series, sinceMs) {
   }));
 }
 
+export function getTokenStats() {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n,
+              COALESCE(SUM(prompt_tokens), 0)     AS total_prompt,
+              COALESCE(SUM(completion_tokens), 0) AS total_completion,
+              MIN(ts) AS oldest_ts,
+              MAX(ts) AS newest_ts
+         FROM request_log`,
+    )
+    .get();
+  return {
+    request_count: row?.n || 0,
+    total_prompt_tokens: row?.total_prompt || 0,
+    total_completion_tokens: row?.total_completion || 0,
+    oldest_ts: row?.oldest_ts || null,
+    newest_ts: row?.newest_ts || null,
+  };
+}
+
+export function getTokenTimeseries(sinceMs, untilMs, bucketMs) {
+  // Per-bucket SUM of prompt + completion tokens from request_log (not
+  // metric_point — that table holds avg-friendly scalars per poll).
+  const rows = db
+    .prepare(
+      `SELECT
+         CAST(ts / ? AS INTEGER) * ?      AS bucket_ts,
+         COALESCE(SUM(prompt_tokens), 0)     AS in_tok,
+         COALESCE(SUM(completion_tokens), 0) AS out_tok,
+         COUNT(*)                            AS turns
+       FROM request_log
+       WHERE ts >= ? AND ts < ?
+       GROUP BY bucket_ts
+       ORDER BY bucket_ts ASC`,
+    )
+    .all(bucketMs, bucketMs, sinceMs, untilMs);
+  return rows.map((r) => ({
+    ts: r.bucket_ts,
+    in_tok: r.in_tok,
+    out_tok: r.out_tok,
+    turns: r.turns,
+  }));
+}
+
 export function getMetricsBucketed(series, sinceMs, untilMs, bucketMs) {
   const rows = db
     .prepare(

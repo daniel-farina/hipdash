@@ -7,6 +7,7 @@ import {
   setKv,
   getKv,
 } from './db.js';
+import { startMacmon, getLatestMacmon } from './macmon.js';
 
 const log = (...a) => console.log('[poller]', ...a);
 
@@ -241,12 +242,47 @@ async function pollSidecar() {
   if (typeof stats?.load?.['1m'] === 'number') {
     rows.push({ ts, series: 'load_1m', value: stats.load['1m'] });
   }
+  // Thermal — pmset reports a "CPU_Speed_Limit" only when throttling kicks
+  // in. Silence == no thermal pressure == 0% throttle. Record 0 in that
+  // common case so we have a continuous series.
+  if (stats?.thermal !== undefined) {
+    const speedLimit = stats?.thermal?.cpu_speed_limit_pct;
+    const throttle =
+      typeof speedLimit === 'number' && isFinite(speedLimit)
+        ? Math.max(0, 100 - speedLimit)
+        : 0;
+    rows.push({ ts, series: 'thermal_throttle_pct', value: throttle });
+  }
+
+  // Real Apple Silicon temperature + power, courtesy of macmon (sudoless
+  // IOReport tap). Adds cpu_temp_c, gpu_temp_c, plus the per-component
+  // power rails. Skipped silently when macmon isn't installed.
+  const m = getLatestMacmon();
+  if (m) {
+    const push = (series, value) => {
+      if (typeof value === 'number' && isFinite(value)) {
+        rows.push({ ts, series, value });
+      }
+    };
+    push('cpu_temp_c',     m.temp?.cpu_temp_avg);
+    push('gpu_temp_c',     m.temp?.gpu_temp_avg);
+    push('cpu_power_w',    m.cpu_power);
+    push('gpu_power_w',    m.gpu_power);
+    push('ane_power_w',    m.ane_power);
+    push('ram_power_w',    m.ram_power);
+    push('sys_power_w',    m.sys_power);
+    push('all_power_w',    m.all_power);
+    // Apple Silicon: GPU usage 0..1 → percent
+    if (typeof m.gpu_usage?.[1] === 'number') push('gpu_usage_pct', m.gpu_usage[1] * 100);
+    if (typeof m.cpu_usage_pct === 'number')  push('cpu_usage_pct_m', m.cpu_usage_pct * 100);
+  }
   if (rows.length) recordMetricsBatch(rows);
   saveSnapshot('system_stats', stats);
 }
 
 export function startPollers() {
   log('starting pollers');
+  startMacmon();
   // MTPLX every 1.5s
   const mInt = setInterval(() => {
     pollMtplx().catch((e) => log('pollMtplx error:', e.message));

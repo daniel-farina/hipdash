@@ -10,6 +10,10 @@ import Pill, { modeTone, cacheTone } from '../components/Pill';
 import SessionBankChart from '../components/SessionBankChart';
 import SessionBankHistory from '../components/SessionBankHistory';
 import MetricChart from '../components/MetricChart';
+import HipSidecar from '../components/HipSidecar';
+import TokensSavingsChart from '../components/TokensSavingsChart';
+import DraggableGrid from '../components/DraggableGrid';
+import { useLayoutOrder } from '../lib/useLayoutOrder';
 
 type MetricsResp = { since: number; series: Record<string, MetricPoint[]> };
 type BenchRequest = {
@@ -40,7 +44,7 @@ export default function MtplxPage() {
   const { data: runsResp, refresh: refreshRuns } = usePoll<{ runs: Run[] }>(() => getJson('/api/runs?target=mtplx'), 8000);
   const [selectedRunId, setSelectedRunId] = useState<number | 'current' | 'all'>('current');
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<'bench' | 'live' | 'bank' | 'sessions'>('bench');
+  const [activeTab, setActiveTab] = useState<'bench' | 'live' | 'bank' | 'sessions' | 'hip'>('bench');
   const [showAll, setShowAll] = useState(false);
 
   const runs = runsResp?.runs || [];
@@ -152,94 +156,13 @@ export default function MtplxPage() {
 
       <div className="section">
         <div className="head">
-          <h2>Metrics history</h2>
-          <span className="right">per-request · range toggle per chart</span>
+          <h2>Tokens &amp; savings</h2>
+          <span className="right">actual cost on MTPLX vs cloud list price</span>
         </div>
-        <div className="row metrics-grid">
-          <MetricChart
-            title="Decode tok/s"
-            series="decode_tok_s"
-            color="#7ed957"
-            unit="tok/s"
-            integer
-          />
-          <MetricChart
-            title="Prefill tok/s"
-            series="prefill_tok_s"
-            color="#84a9ff"
-            unit="tok/s"
-            integer
-          />
-          <MetricChart
-            title="TTFT"
-            series="ttft_s"
-            color="#f4c95d"
-            unit="s"
-          />
-          <MetricChart
-            title="Context size"
-            series="context_len"
-            color="#c986ff"
-            unit="K"
-            integer
-            valueTransform={(v) => v / 1000}
-          />
-          <MetricChart
-            title="Prompt tokens"
-            series="prompt_tokens"
-            color="#6fd6e0"
-            unit="K"
-            integer
-            valueTransform={(v) => v / 1000}
-          />
-          <MetricChart
-            title="Completion tokens"
-            series="completion_tokens"
-            color="#ff9bd2"
-            unit=""
-            integer
-          />
-          <MetricChart
-            title="Tokenize + prefill"
-            series="prompt_eval_time_s"
-            color="#66e0a3"
-            unit="s"
-          />
-          <MetricChart
-            title="Avg accept"
-            series="avg_accept_pct"
-            color="#ffb16c"
-            unit="%"
-            integer
-          />
-          <MetricChart
-            title="Cached tokens"
-            series="cached_tokens"
-            color="#a9a9ff"
-            unit="K"
-            integer
-            valueTransform={(v) => v / 1000}
-          />
-          <MetricChart
-            title="Verify calls"
-            series="verify_calls"
-            color="#84a9ff"
-            integer
-          />
-          <MetricChart
-            title="Bonus tokens"
-            series="bonus_tokens"
-            color="#7ed957"
-            integer
-          />
-          <MetricChart
-            title="Correction tokens"
-            series="correction_tokens"
-            color="#f47272"
-            integer
-          />
-        </div>
+        <TokensSavingsChart />
       </div>
+
+      <MetricsHistorySection />
 
       {Array.isArray(latest.accepted_by_depth) && latest.accepted_by_depth.length ? (
         <div className="section">
@@ -281,6 +204,12 @@ export default function MtplxPage() {
               Active sessions
               <span className="tab-badge">{sessions.length}</span>
             </button>
+            <button
+              className={`tab ${activeTab === 'hip' ? 'on' : ''}`}
+              onClick={() => setActiveTab('hip')}
+            >
+              Hip sidecar
+            </button>
           </div>
           <span className="right">
             {activeTab === 'bench' ? (
@@ -297,6 +226,8 @@ export default function MtplxPage() {
               <>{sessionsResp?.session_bank?.eviction_log?.length ?? 0} evictions · {fmtBytes(sessionsResp?.session_bank?.total_nbytes)} live</>
             ) : activeTab === 'sessions' ? (
               <>{sessions.length} session{sessions.length === 1 ? '' : 's'} · {sessions.filter((s: any) => s.in_flight).length} in flight</>
+            ) : activeTab === 'hip' ? (
+              <>per-round summaries from ~/.hip/sessions.jsonl</>
             ) : (
               <>/metrics buffer · {recent?.length ?? 0}</>
             )}
@@ -318,6 +249,8 @@ export default function MtplxPage() {
           <SessionBankHistory sessions={sessionsResp} />
         ) : activeTab === 'sessions' ? (
           <SessionsTable sessions={sessions} />
+        ) : activeTab === 'hip' ? (
+          <HipSidecar />
         ) : (
           <RecentBufferTable recent={recent} />
         )}
@@ -480,6 +413,60 @@ function AcceptanceCard({ latest }: { latest: any }) {
         <span>completion <b>{completion}</b></span>
         <span>depth <b>{latest.mtp_depth ?? '-'}</b></span>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Reorderable Metrics history grid ---------- */
+
+const METRIC_DEFS: Record<string, { title: string; series: string; color: string; unit?: string; integer?: boolean; valueTransform?: (v: number) => number }> = {
+  decode:      { title: 'Decode tok/s',       series: 'decode_tok_s',       color: '#7ed957', unit: 'tok/s', integer: true },
+  prefill:     { title: 'Prefill tok/s',      series: 'prefill_tok_s',      color: '#84a9ff', unit: 'tok/s', integer: true },
+  ttft:        { title: 'TTFT',               series: 'ttft_s',             color: '#f4c95d', unit: 's' },
+  context:     { title: 'Context size',       series: 'context_len',        color: '#c986ff', unit: 'K',     integer: true, valueTransform: (v) => v / 1000 },
+  prompt:      { title: 'Prompt tokens',      series: 'prompt_tokens',      color: '#6fd6e0', unit: 'K',     integer: true, valueTransform: (v) => v / 1000 },
+  completion:  { title: 'Completion tokens',  series: 'completion_tokens',  color: '#ff9bd2', unit: '',      integer: true },
+  tokenize:    { title: 'Tokenize + prefill', series: 'prompt_eval_time_s', color: '#66e0a3', unit: 's' },
+  accept:      { title: 'Avg accept',         series: 'avg_accept_pct',     color: '#ffb16c', unit: '%',     integer: true },
+  cached:      { title: 'Cached tokens',      series: 'cached_tokens',      color: '#a9a9ff', unit: 'K',     integer: true, valueTransform: (v) => v / 1000 },
+  verify:      { title: 'Verify calls',       series: 'verify_calls',       color: '#84a9ff', integer: true },
+  bonus:       { title: 'Bonus tokens',       series: 'bonus_tokens',       color: '#7ed957', integer: true },
+  correction:  { title: 'Correction tokens',  series: 'correction_tokens',  color: '#f47272', integer: true },
+};
+
+const DEFAULT_METRIC_ORDER = ['decode', 'prefill', 'ttft', 'context', 'prompt', 'completion', 'tokenize', 'accept', 'cached', 'verify', 'bonus', 'correction'];
+
+function MetricsHistorySection() {
+  const { order, setOrder, reset } = useLayoutOrder('mtplx.metrics-grid', DEFAULT_METRIC_ORDER);
+  const items: Record<string, React.ReactNode> = {};
+  for (const id of Object.keys(METRIC_DEFS)) {
+    const d = METRIC_DEFS[id];
+    items[id] = (
+      <MetricChart
+        title={d.title}
+        series={d.series}
+        color={d.color}
+        unit={d.unit}
+        integer={d.integer}
+        valueTransform={d.valueTransform}
+      />
+    );
+  }
+  return (
+    <div className="section">
+      <div className="head">
+        <h2>Metrics history</h2>
+        <span className="right" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          drag <span className="dnd-handle-static">⠿</span> to reorder · saved server-side
+          <button className="btn" onClick={reset} title="Reset to default order">reset</button>
+        </span>
+      </div>
+      <DraggableGrid
+        className="row metrics-grid"
+        order={order}
+        items={items}
+        onReorder={setOrder}
+      />
     </div>
   );
 }

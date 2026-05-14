@@ -1,6 +1,7 @@
 import { usePoll } from '../lib/usePoll';
 import { getJson, Status } from '../lib/api';
 import { fmtAge } from '../lib/format';
+import SavingsBadge from './SavingsBadge';
 
 export default function Topbar() {
   const { data } = usePoll<Status>(() => getJson('/api/status'), 2000);
@@ -28,6 +29,7 @@ export default function Topbar() {
         {data?.last_mtplx_seen ? (
           <span className="pill muted">seen {fmtAge(data.last_mtplx_seen)}</span>
         ) : null}
+        <SavingsBadge />
       </div>
     </div>
   );

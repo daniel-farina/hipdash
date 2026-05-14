@@ -3,6 +3,7 @@ import { getJson, MetricPoint, Restart, Status } from '../lib/api';
 import { fmtAge, fmtBytes, fmtNumber, fmtPct, fmtTime } from '../lib/format';
 import LineChart from '../components/LineChart';
 import Pill from '../components/Pill';
+import TokensSavingsChart from '../components/TokensSavingsChart';
 import { Link } from 'react-router-dom';
 
 type MetricsResp = { since: number; series: Record<string, MetricPoint[]> };
@@ -139,6 +140,14 @@ export default function Overview() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="section">
+        <div className="head">
+          <h2>Tokens &amp; savings</h2>
+          <span className="right">vs cloud API list prices</span>
+        </div>
+        <TokensSavingsChart />
       </div>
 
       <div className="section">

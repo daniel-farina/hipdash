@@ -11,12 +11,18 @@ import {
   getRequests,
   getRequestsBetween,
   getRuns,
+  getTokenStats,
+  getTokenTimeseries,
   logRestart,
   prune,
+  getKv,
+  setKv,
 } from './db.js';
 import { proxyRequest } from './upstreams.js';
 import { startPollers, getStatus } from './poller.js';
 import { subscribe as subscribeProgress } from './progress.js';
+import { getLatestMacmon, macmonStatus } from './macmon.js';
+import { getSessions as getHipSessions, getSessionDetail as getHipSessionDetail, getSessionsById as getHipSessionsById } from './hip.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIST = path.resolve(__dirname, '../../frontend/dist');
@@ -104,6 +110,60 @@ app.get('/api/live-progress', (req, res) => {
   subscribeProgress(res);
 });
 
+// Latest macmon snapshot — used by the dashboard to show "now" thermals.
+app.get('/api/system/now', (req, res) => {
+  const m = getLatestMacmon();
+  res.json({ macmon: m, status: macmonStatus() });
+});
+
+// Aggregate token usage across the whole request_log — feeds the
+// "money saved vs cloud API" widget.
+app.get('/api/stats/tokens', (req, res) => {
+  res.json(getTokenStats());
+});
+
+// Per-bucket SUM of input + output tokens for the savings chart.
+app.get('/api/stats/tokens-timeseries', (req, res) => {
+  const rangeMs = Number(req.query.range_ms || 7 * 24 * 60 * 60 * 1000);
+  const maxPoints = Math.min(2000, Math.max(50, Number(req.query.max_points || 300)));
+  const now = Date.now();
+  const since = now - rangeMs;
+  const bucketMs = Math.max(60_000, Math.ceil(rangeMs / maxPoints));
+  res.json({
+    since,
+    until: now,
+    bucket_ms: bucketMs,
+    buckets: getTokenTimeseries(since, now, bucketMs),
+  });
+});
+
+// Layout persistence — dashboard panel order per `key`. Stored in kv_state.
+app.get('/api/layout/:key', (req, res) => {
+  const k = `layout:${req.params.key}`;
+  const row = getKv(k);
+  if (!row) return res.json({ key: req.params.key, order: null });
+  res.json({ key: req.params.key, order: row.value?.order || null, ts: row.ts });
+});
+app.put('/api/layout/:key', express.json(), (req, res) => {
+  const order = Array.isArray(req.body?.order) ? req.body.order.map(String) : null;
+  if (!order) return res.status(400).json({ error: 'body.order must be an array of strings' });
+  setKv(`layout:${req.params.key}`, { order });
+  res.json({ ok: true, key: req.params.key, order });
+});
+
+// Hip sidecar session log (~/.hip/sessions.jsonl).
+app.get('/api/hip/sessions', (req, res) => {
+  res.json(getHipSessions());
+});
+app.get('/api/hip/sessions/:id', (req, res) => {
+  const d = getHipSessionDetail(req.params.id);
+  if (d.error) return res.status(d.error === 'not_found' ? 404 : 500).json(d);
+  res.json(d);
+});
+app.get('/api/hip/by-id', (req, res) => {
+  res.json(getHipSessionsById());
+});
+
 // Archive the current run: write a synthetic restart event so the existing
 // boundary logic closes the live run and starts a new one. MTPLX itself is
 // not touched.
@@ -142,10 +202,11 @@ app.use((req, res) => {
 
 startPollers();
 
-// Prune older than 14 days every hour
+// Prune older than 90 days every hour
+const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 setInterval(() => {
   try {
-    prune(14 * 24 * 60 * 60 * 1000);
+    prune(RETENTION_MS);
   } catch (e) {
     console.error('[prune] failed:', e.message);
   }

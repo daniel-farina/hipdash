@@ -44,8 +44,16 @@ export default function LineChart({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, rect.width, height);
 
-    const padL = showAxes ? 46 : 6;
-    const padR = series.some((s) => s.axis === 'right') ? (showAxes ? 36 : 6) : 6;
+    // Allocate enough left padding for the widest possible label. Each char
+    // is ~6.5px at our 10px mono font; we factor in the unit string too.
+    const baseL = 18; // for "0" / "55"
+    const unitCh = yUnitLeft ? yUnitLeft.length + 1 : 0; // space + unit
+    const padL = showAxes ? Math.max(40, baseL + (5 + unitCh) * 7) : 6;
+    const baseR = 18;
+    const unitChR = yUnitRight ? yUnitRight.length + 1 : 0;
+    const padR = series.some((s) => s.axis === 'right')
+      ? (showAxes ? Math.max(30, baseR + (5 + unitChR) * 7) : 6)
+      : 6;
     const padT = 8;
     const padB = showAxes ? 18 : 4;
     const w = rect.width - padL - padR;

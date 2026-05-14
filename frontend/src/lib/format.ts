@@ -55,6 +55,24 @@ export function shortenSessionId(s: string | null | undefined, threshold = 22): 
   return `${head}…${tail}`;
 }
 
+// Compact, decimal-aware formatting for token counts. Always returns 2-3
+// significant figures so 81,823,098 reads as "81.82M" instead of "82M".
+export function fmtTokens(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return '-';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (abs >= 1e4) return `${(n / 1e3).toFixed(1)}K`;
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+  return n.toLocaleString();
+}
+
+// Plain integer with locale thousands separators (e.g. 7,582).
+export function fmtInt(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return '-';
+  return Math.round(n).toLocaleString();
+}
+
 export function fmtDuration(seconds: number | null | undefined): string {
   if (seconds == null || !isFinite(seconds)) return '-';
   const s = Math.max(0, Math.round(seconds));

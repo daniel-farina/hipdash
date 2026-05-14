@@ -65,7 +65,21 @@ export default function MetricChart({
   const peak = points.length ? Math.max(...points.map((p) => p.value)) : null;
   const avg = points.length ? points.reduce((a, b) => a + b.value, 0) / points.length : null;
 
-  const fmt = fmtCurrent || ((v: number) => `${fmtNumber(v, integer ? 0 : 1)}${unit}`);
+  // `now` and `peak` are observed samples — use the configured integer/decimal
+  // setting. `avg` is computed across all samples, so it's almost never a
+  // whole number; pick decimals based on magnitude to avoid noise on big
+  // numbers and lost precision on small ones.
+  const fmtSample = fmtCurrent || ((v: number) => `${fmtNumber(v, integer ? 0 : 1)}${unit}`);
+  const fmtAvg = fmtCurrent || ((v: number) => {
+    const abs = Math.abs(v);
+    if (abs === 0) return `0${unit}`;
+    let digits: number;
+    if (abs >= 100) digits = 1;       // 1234.5
+    else if (abs >= 10) digits = 2;   // 42.71
+    else if (abs >= 1) digits = 2;    // 1.23
+    else digits = 3;                  // 0.123
+    return `${v.toFixed(digits)}${unit}`;
+  });
 
   return (
     <div className="chart-card">
@@ -88,13 +102,12 @@ export default function MetricChart({
         series={lineSeries}
         height={height}
         showAxes={true}
-        yUnitLeft={unit}
         yIntegerLeft={integer}
       />
       <div className="legend">
-        <span><i style={{ background: color }} />now <b>{last != null ? fmt(last) : '-'}</b></span>
-        {avg != null ? <span>avg <b>{fmt(avg)}</b></span> : null}
-        {showPeak && peak != null ? <span style={{ marginLeft: 'auto' }}>peak <b>{fmt(peak)}</b></span> : null}
+        <span><i style={{ background: color }} />now <b>{last != null ? fmtSample(last) : '-'}</b></span>
+        {avg != null ? <span>avg <b>{fmtAvg(avg)}</b></span> : null}
+        {showPeak && peak != null ? <span style={{ marginLeft: 'auto' }}>peak <b>{fmtSample(peak)}</b></span> : null}
       </div>
     </div>
   );

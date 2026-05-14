@@ -324,6 +324,15 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink-faint);
   text-transform: uppercase;
 }
+.chart-head .chart-daterange {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  color: var(--ink-faint);
+  text-transform: none;
+  font-weight: 400;
+  margin-left: 4px;
+}
 .chart-head .chart-range {
   display: inline-flex;
   gap: 2px;
@@ -854,10 +863,331 @@ a { color: inherit; text-decoration: none; }
   color: #cfe0ff;
 }
 
+.io-bar {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 150px;
+  vertical-align: middle;
+}
+.io-row {
+  display: grid;
+  grid-template-columns: 18px 1fr 50px;
+  gap: 5px;
+  align-items: center;
+}
+.io-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  text-align: right;
+}
+.io-row-in  .io-label { color: rgba(132,169,255,0.7); }
+.io-row-out .io-label { color: rgba(126,217,87,0.7); }
+.io-track {
+  height: 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.io-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  min-width: 1px;
+}
+.io-in  { background: rgba(132,169,255,0.70); }
+.io-out { background: rgba(126,217,87,0.85); }
+.io-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+  text-align: right;
+  font-feature-settings: "tnum";
+}
+.io-row-in  .io-num { color: rgba(207,224,255,0.85); }
+.io-row-out .io-num { color: rgba(216,243,200,0.85); }
+
+.bench-tools {
+  display: inline-flex;
+  gap: 3px;
+  flex-wrap: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+}
+.bench-tool-pill {
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+.bench-tool-pill small {
+  font-size: 8.5px;
+  margin-left: 1px;
+  opacity: 0.85;
+}
+.bench-tools-more {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  color: var(--ink-faint);
+  align-self: center;
+}
+
+/* Repeated header row inside each session group (sits below the chart so
+   column labels align with the data rows below them). Mirrors thead th. */
+.bench-tbl tr.session-group-headers th {
+  text-align: left;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  font-size: 9px;
+  border-bottom: 1px solid var(--line-2);
+  padding: 5px 9px;
+  background: rgba(255,255,255,0.025);
+}
+.bench-tbl tr.session-group-headers th.num { text-align: right; }
+
+.bench-tbl tr.session-group-chart td {
+  background: rgba(255,255,255,0.012);
+  border-bottom: 1px solid var(--line);
+}
+.session-chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.session-chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
 .bench-tbl tr.bench-running td {
   background: rgba(126,217,87,0.04);
   border-bottom: 1px solid rgba(126,217,87,0.20);
   color: var(--ink-dim);
+}
+
+/* Hip sidecar */
+.hip-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.012);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.hip-meta > div { display: flex; flex-direction: column; gap: 2px; }
+.hip-meta .lab {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.hip-meta b { color: var(--ink); font-weight: 600; font-feature-settings: "tnum"; font-size: 14px; }
+@media (max-width: 980px) { .hip-meta { grid-template-columns: repeat(2, 1fr); } }
+
+.hip-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hip-summary-line {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.hip-summary-num {
+  color: var(--ink-faint);
+  font-feature-settings: "tnum";
+  text-align: right;
+}
+.hip-summary-text { color: var(--ink-dim); }
+
+/* Savings badge (topbar) */
+.savings-root { position: relative; }
+.savings-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(244,201,93,0.45);
+  background: rgba(244,201,93,0.08);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: background 0.12s;
+}
+.savings-pill:hover, .savings-pill.on {
+  background: rgba(244,201,93,0.14);
+}
+.savings-pill .savings-label {
+  color: var(--ink-faint);
+  font-size: 10px;
+  letter-spacing: 0.20em;
+}
+.savings-pill .savings-amount {
+  color: #ffe7c4;
+  font-weight: 700;
+  font-size: 13px;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.savings-pill .savings-vs {
+  color: var(--ink-faint);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: none;
+}
+.savings-pill .savings-caret {
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+.savings-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 320px;
+  z-index: 30;
+  border: 1px solid var(--line-3);
+  border-radius: 10px;
+  background: #0c0c11;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  padding: 6px;
+}
+.savings-menu-head {
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.savings-menu-head .lab {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.20em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.savings-totals {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  margin-top: 3px;
+}
+.savings-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  text-align: left;
+}
+.savings-row:hover { background: rgba(255,255,255,0.04); color: var(--ink); }
+.savings-row.on {
+  background: rgba(244,201,93,0.10);
+  color: #ffe7c4;
+}
+.savings-row.savings-row-local {
+  background: rgba(126,217,87,0.08);
+  border: 1px solid rgba(126,217,87,0.30);
+  color: #d8f3c8;
+  margin-bottom: 4px;
+  cursor: default;
+}
+.savings-row.savings-row-local:hover { background: rgba(126,217,87,0.10); }
+.savings-row.savings-row-local .savings-row-cost { color: #d8f3c8; }
+.savings-row-name {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+.savings-row-vendor {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.savings-row-cost {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  color: inherit;
+}
+/* Drag-and-drop grid (drag handle + states) */
+.dnd-cell {
+  position: relative;
+  transition: opacity 0.12s, transform 0.12s, outline-color 0.12s;
+}
+.dnd-cell.dragging {
+  opacity: 0.5;
+  transform: scale(0.985);
+}
+.dnd-cell.over::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 12px;
+  outline: 2px dashed rgba(126,217,87,0.7);
+  pointer-events: none;
+  z-index: 1;
+}
+.dnd-handle {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  font-size: 12px;
+  color: var(--ink-faint);
+  cursor: grab;
+  user-select: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.dnd-cell:hover .dnd-handle { opacity: 0.8; }
+.dnd-handle:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
+.dnd-handle:active { cursor: grabbing; }
+.dnd-handle-static { color: var(--ink-faint); }
+
+.savings-menu-foot {
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
 }
 .bench-tbl tr.bench-running td:first-child {
   border-left: 3px solid var(--good);
